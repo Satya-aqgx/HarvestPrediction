@@ -11,7 +11,7 @@ st.set_page_config(
     page_title="Count 366 - Vannamei Biomass Prediction",
     page_icon="🦐",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS
@@ -59,18 +59,18 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# DOC to ABW lookup table
-DOC_ABW_LOOKUP = {
+# DOC to ABW lookup table - Default values
+DEFAULT_DOC_ABW_LOOKUP = {
     10: 0.40, 20: 1.60, 30: 4.20, 40: 7.00,
     50: 10.00, 60: 13.00, 70: 17.00, 80: 21.00,
     90: 25.50, 100: 28.50, 110: 31.00, 120: 33.50,
     130: 35.50, 140: 37.50
 }
 
-# Prediction parameters
-SURVIVAL_RATE = 0.80
-DAILY_GROWTH = 0.25
-FORECAST_DAYS = 10
+# Default prediction parameters
+DEFAULT_SURVIVAL_RATE = 0.80
+DEFAULT_DAILY_GROWTH = 0.25
+DEFAULT_FORECAST_DAYS = 10
 
 @st.cache_data
 def load_and_process_data(file_path):
@@ -104,12 +104,12 @@ def load_and_process_data(file_path):
         st.error(f"Error loading data: {e}")
         return None
 
-def get_estimated_abw(doc):
+def get_estimated_abw(doc, doc_abw_lookup):
     """Interpolate ABW from DOC"""
     if pd.isna(doc):
         return None
     
-    docs = sorted(DOC_ABW_LOOKUP.keys())
+    docs = sorted(doc_abw_lookup.keys())
     
     if doc < docs[0] or doc > docs[-1]:
         return None
@@ -119,14 +119,14 @@ def get_estimated_abw(doc):
         upper_doc = docs[i + 1]
         
         if lower_doc <= doc <= upper_doc:
-            lower_abw = DOC_ABW_LOOKUP[lower_doc]
-            upper_abw = DOC_ABW_LOOKUP[upper_doc]
+            lower_abw = doc_abw_lookup[lower_doc]
+            upper_abw = doc_abw_lookup[upper_doc]
             estimated_abw = lower_abw + ((doc - lower_doc) / (upper_doc - lower_doc)) * (upper_abw - lower_abw)
             return estimated_abw
     
     return None
 
-def calculate_pond_biomass(row):
+def calculate_pond_biomass(row, survival_rate, doc_abw_lookup):
     """Calculate biomass for a pond"""
     total_seed = row["totalSeed"]
     current_doc = row["currentDOC"]
@@ -147,7 +147,7 @@ def calculate_pond_biomass(row):
             "predictionStatus": "Invalid DOC"
         })
     
-    current_abw = get_estimated_abw(current_doc)
+    current_abw = get_estimated_abw(current_doc, doc_abw_lookup)
     
     if current_abw is None:
         return pd.Series({
@@ -157,7 +157,7 @@ def calculate_pond_biomass(row):
             "predictionStatus": "DOC outside reference range"
         })
     
-    surviving_count = total_seed * SURVIVAL_RATE
+    surviving_count = total_seed * survival_rate
     current_biomass = (surviving_count * current_abw) / 1000
     
     return pd.Series({
@@ -167,19 +167,19 @@ def calculate_pond_biomass(row):
         "predictionStatus": "Success"
     })
 
-def calculate_10_day_forecast(valid_ponds_df):
+def calculate_10_day_forecast(valid_ponds_df, survival_rate, daily_growth, forecast_days):
     """Calculate 10-day forecast for valid ponds"""
     forecast_records = []
     
     for _, pond in valid_ponds_df.iterrows():
-        # Calculate 10th-day DOC
-        future_doc = pond["currentDOC"] + FORECAST_DAYS
+        # Calculate future DOC
+        future_doc = pond["currentDOC"] + forecast_days
         current_abw = pond["estimatedABW"]
         
-        # Calculate 10th-day ABW
-        future_abw = current_abw + (DAILY_GROWTH * FORECAST_DAYS)
+        # Calculate future ABW
+        future_abw = current_abw + (daily_growth * forecast_days)
         
-        # Calculate 10th-day biomass
+        # Calculate future biomass
         harvest_kg = (pond["survivingCount"] * future_abw) / 1000
         
         # Calculate shrimp per kg
@@ -232,9 +232,97 @@ def create_count_per_kg_grouping(forecast_df):
 
 # Main Dashboard
 def main():
+    # === SIDEBAR: PARAMETER INPUTS ===
+    st.sidebar.title("Prediction Parameters")
+    st.sidebar.markdown("Adjust the parameters below and click 'Apply' to update predictions.")
+    st.sidebar.markdown("---")
+    
+    # Survival Rate
+    survival_rate = st.sidebar.slider(
+        "Survival Rate (%)",
+        min_value=50,
+        max_value=100,
+        value=int(DEFAULT_SURVIVAL_RATE * 100),
+        step=1,
+        help="Expected survival rate of stocked seeds"
+    ) / 100
+    
+    # Daily Growth
+    daily_growth = st.sidebar.number_input(
+        "Daily Growth (grams/day)",
+        min_value=0.1,
+        max_value=1.0,
+        value=DEFAULT_DAILY_GROWTH,
+        step=0.05,
+        help="Expected daily weight gain per shrimp"
+    )
+    
+    # Forecast Days
+    forecast_days = st.sidebar.number_input(
+        "Forecast Period (days)",
+        min_value=1,
+        max_value=30,
+        value=DEFAULT_FORECAST_DAYS,
+        step=1,
+        help="Number of days to forecast ahead"
+    )
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### DOC to ABW Lookup Table")
+    st.sidebar.markdown("Edit the reference values below:")
+    
+    # DOC-ABW Lookup Table inputs
+    doc_abw_lookup = {}
+    
+    # Create editable inputs for each DOC-ABW pair
+    st.sidebar.markdown("**DOC (Days) : ABW (grams)**")
+    
+    col1, col2 = st.sidebar.columns(2)
+    
+    # First column (DOC 10-70)
+    with col1:
+        doc_abw_lookup[10] = st.number_input("10", value=DEFAULT_DOC_ABW_LOOKUP[10], step=0.1, key="doc10", label_visibility="collapsed")
+        st.markdown("**10** days")
+        doc_abw_lookup[20] = st.number_input("20", value=DEFAULT_DOC_ABW_LOOKUP[20], step=0.1, key="doc20", label_visibility="collapsed")
+        st.markdown("**20** days")
+        doc_abw_lookup[30] = st.number_input("30", value=DEFAULT_DOC_ABW_LOOKUP[30], step=0.1, key="doc30", label_visibility="collapsed")
+        st.markdown("**30** days")
+        doc_abw_lookup[40] = st.number_input("40", value=DEFAULT_DOC_ABW_LOOKUP[40], step=0.1, key="doc40", label_visibility="collapsed")
+        st.markdown("**40** days")
+        doc_abw_lookup[50] = st.number_input("50", value=DEFAULT_DOC_ABW_LOOKUP[50], step=0.1, key="doc50", label_visibility="collapsed")
+        st.markdown("**50** days")
+        doc_abw_lookup[60] = st.number_input("60", value=DEFAULT_DOC_ABW_LOOKUP[60], step=0.1, key="doc60", label_visibility="collapsed")
+        st.markdown("**60** days")
+        doc_abw_lookup[70] = st.number_input("70", value=DEFAULT_DOC_ABW_LOOKUP[70], step=0.1, key="doc70", label_visibility="collapsed")
+        st.markdown("**70** days")
+    
+    # Second column (DOC 80-140)
+    with col2:
+        doc_abw_lookup[80] = st.number_input("80", value=DEFAULT_DOC_ABW_LOOKUP[80], step=0.1, key="doc80", label_visibility="collapsed")
+        st.markdown("**80** days")
+        doc_abw_lookup[90] = st.number_input("90", value=DEFAULT_DOC_ABW_LOOKUP[90], step=0.1, key="doc90", label_visibility="collapsed")
+        st.markdown("**90** days")
+        doc_abw_lookup[100] = st.number_input("100", value=DEFAULT_DOC_ABW_LOOKUP[100], step=0.1, key="doc100", label_visibility="collapsed")
+        st.markdown("**100** days")
+        doc_abw_lookup[110] = st.number_input("110", value=DEFAULT_DOC_ABW_LOOKUP[110], step=0.1, key="doc110", label_visibility="collapsed")
+        st.markdown("**110** days")
+        doc_abw_lookup[120] = st.number_input("120", value=DEFAULT_DOC_ABW_LOOKUP[120], step=0.1, key="doc120", label_visibility="collapsed")
+        st.markdown("**120** days")
+        doc_abw_lookup[130] = st.number_input("130", value=DEFAULT_DOC_ABW_LOOKUP[130], step=0.1, key="doc130", label_visibility="collapsed")
+        st.markdown("**130** days")
+        doc_abw_lookup[140] = st.number_input("140", value=DEFAULT_DOC_ABW_LOOKUP[140], step=0.1, key="doc140", label_visibility="collapsed")
+        st.markdown("**140** days")
+    
+    st.sidebar.markdown("---")
+    
+    # Reset button
+    if st.sidebar.button("Reset to Defaults"):
+        st.rerun()
+    
+    # === MAIN CONTENT ===
     # Header
     st.markdown('<div class="main-header">Count 366 - Vannamei Biomass Prediction</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="sub-header">10-Day harvest forecast based on current pond data | Generated: {datetime.now().strftime("%B %d, %Y at %H:%M")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sub-header">{forecast_days}-Day harvest forecast based on current pond data | Generated: {datetime.now().strftime("%B %d, %Y at %H:%M")}</div>', unsafe_allow_html=True)
     
     # Description
     st.markdown("""
@@ -259,14 +347,14 @@ def main():
     
     # Calculate biomass
     df[["estimatedABW", "survivingCount", "currentBiomassKG", "predictionStatus"]] = df.apply(
-        calculate_pond_biomass, axis=1
+        lambda row: calculate_pond_biomass(row, survival_rate, doc_abw_lookup), axis=1
     )
     
     # Filter successful predictions
     valid_ponds = df[df["predictionStatus"] == "Success"].copy()
     
-    # Calculate 10-day forecast
-    forecast_df = calculate_10_day_forecast(valid_ponds)
+    # Calculate forecast
+    forecast_df = calculate_10_day_forecast(valid_ponds, survival_rate, daily_growth, forecast_days)
     
     # === SECTION 1: METHODOLOGY ===
     st.markdown("## Methodology")
@@ -278,9 +366,9 @@ def main():
             st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
             st.markdown("### Key Assumptions")
             st.markdown(f"""
-            - **Survival Rate:** {SURVIVAL_RATE * 100:.0f}% ({SURVIVAL_RATE})
-            - **Daily Growth Rate:** {DAILY_GROWTH} grams/day
-            - **Forecast Period:** {FORECAST_DAYS} days
+            - **Survival Rate:** {survival_rate * 100:.0f}% ({survival_rate})
+            - **Daily Growth Rate:** {daily_growth} grams/day
+            - **Forecast Period:** {forecast_days} days
             
             *These assumptions are used to calculate biomass projections for all ponds in the Count 366 system.*
             """)
@@ -300,7 +388,7 @@ def main():
             st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
             st.markdown("### DOC to ABW Reference Table")
             st.markdown("*Days of Culture (DOC) to Average Body Weight (ABW)*")
-            lookup_df = pd.DataFrame(list(DOC_ABW_LOOKUP.items()), columns=['DOC (Days)', 'ABW (grams)'])
+            lookup_df = pd.DataFrame(list(doc_abw_lookup.items()), columns=['DOC (Days)', 'ABW (grams)'])
             st.dataframe(lookup_df, use_container_width=True, height=400, hide_index=True)
             st.markdown("*Linear interpolation applied for values between reference points*")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -355,14 +443,14 @@ def main():
     
     with col2:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.markdown("#### Estimated Biomass (After 10 Days)")
+        st.markdown(f"#### Estimated Biomass (After {forecast_days} Days)")
         st.markdown(f'<div class="big-metric">{forecast_total_biomass:,.0f} KG</div>', unsafe_allow_html=True)
         st.markdown(f'<p style="color: #2ca02c; font-size: 1.5rem; font-weight: bold;">↑ +{growth:,.0f} KG (+{growth_pct:.1f}%)</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Comparison chart
     comparison_data = pd.DataFrame({
-        'Period': ['Current', 'After 10 Days'],
+        'Period': ['Current', f'After {forecast_days} Days'],
         'Biomass (KG)': [current_total_biomass, forecast_total_biomass]
     })
     
@@ -372,7 +460,7 @@ def main():
         y='Biomass (KG)',
         text='Biomass (KG)',
         color='Period',
-        color_discrete_map={'Current': '#1f77b4', 'After 10 Days': '#2ca02c'}
+        color_discrete_map={'Current': '#1f77b4', f'After {forecast_days} Days': '#2ca02c'}
     )
     fig_comparison.update_traces(texttemplate='%{text:,.0f} KG', textposition='outside')
     fig_comparison.update_layout(
@@ -386,7 +474,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 3: SHRIMP COUNT PER KG ===
-    st.markdown("## Shrimp Count per KG Distribution (After 10 Days)")
+    st.markdown(f"## Shrimp Count per KG Distribution (After {forecast_days} Days)")
     
     grouped_forecast = create_count_per_kg_grouping(forecast_df)
     
@@ -406,7 +494,7 @@ def main():
     fig_count.add_trace(go.Bar(
         x=grouped_forecast['estimatedShrimpPerKG'],
         y=grouped_forecast['estimatedHarvestKG'],
-        name='10-Day Forecast',
+        name=f'{forecast_days}-Day Forecast',
         text=grouped_forecast['estimatedHarvestKG'].apply(lambda x: f'{x:,.0f} KG'),
         textposition='auto',
         marker_color='#2ca02c',
@@ -435,13 +523,13 @@ def main():
     display_grouped = grouped_forecast.copy()
     display_grouped['currentBiomassKG'] = display_grouped['currentBiomassKG'].apply(lambda x: f"{x:,.2f}")
     display_grouped['estimatedHarvestKG'] = display_grouped['estimatedHarvestKG'].apply(lambda x: f"{x:,.2f}")
-    display_grouped.columns = ['Count/KG', 'Number of Ponds', 'Current Biomass (KG)', '10-Day Forecast (KG)']
+    display_grouped.columns = ['Count/KG', 'Number of Ponds', 'Current Biomass (KG)', f'{forecast_days}-Day Forecast (KG)']
     st.dataframe(display_grouped, use_container_width=True, hide_index=True)
     
     st.markdown("---")
     
     # === SECTION 4: TOP 10 PONDS ===
-    st.markdown("## Top 10 Ponds by Estimated Harvest (After 10 Days)")
+    st.markdown(f"## Top 10 Ponds by Estimated Harvest (After {forecast_days} Days)")
     
     top_ponds = forecast_df.nlargest(10, 'estimatedHarvestKG')
     top_ponds['label'] = top_ponds.apply(lambda x: f"Pond {int(x['pondId'])}", axis=1)
@@ -464,7 +552,7 @@ def main():
         height=500,
         showlegend=False,
         yaxis={'categoryorder': 'total ascending'},
-        xaxis_title="Estimated Harvest after 10 Days (KG)",
+        xaxis_title=f"Estimated Harvest after {forecast_days} Days (KG)",
         yaxis_title=""
     )
     st.plotly_chart(fig_top, use_container_width=True)
@@ -511,7 +599,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 6: DETAILED TABLE ===
-    st.markdown("## Detailed 10-Day Forecast by Pond")
+    st.markdown(f"## Detailed {forecast_days}-Day Forecast by Pond")
     
     display_forecast = forecast_df[[
         'pondId', 'name', 'area', 'totalSeed', 'currentDoc', 'currentABW',
@@ -530,8 +618,8 @@ def main():
     
     display_forecast.columns = [
         'Pond ID', 'Pond Name', 'Area (Acres)', 'Seeds', 'Current DOC',
-        'Current ABW (g)', 'Current Biomass (KG)', 'Day-10 DOC', 'Day-10 ABW (g)',
-        'Day-10 Forecast (KG)', 'Current Count/KG', 'Day-10 Count/KG'
+        'Current ABW (g)', 'Current Biomass (KG)', f'Day-{forecast_days} DOC', f'Day-{forecast_days} ABW (g)',
+        f'Day-{forecast_days} Forecast (KG)', 'Current Count/KG', f'Day-{forecast_days} Count/KG'
     ]
     
     st.dataframe(display_forecast, use_container_width=True, height=500)
