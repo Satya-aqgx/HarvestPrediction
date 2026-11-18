@@ -8,7 +8,7 @@ from datetime import datetime
 
 # Page configuration
 st.set_page_config(
-    page_title="Aquaculture Harvest Prediction Dashboard",
+    page_title="Count 366 - Vannamei Biomass Prediction",
     page_icon="🦐",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -233,8 +233,16 @@ def create_count_per_kg_grouping(forecast_df):
 # Main Dashboard
 def main():
     # Header
-    st.markdown('<div class="main-header">Aquaculture Harvest Prediction Dashboard</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="sub-header">Generated on {datetime.now().strftime("%B %d, %Y at %H:%M:%S")}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Count 366 - Vannamei Biomass Prediction</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="sub-header">10-Day harvest forecast based on current pond data | Generated: {datetime.now().strftime("%B %d, %Y at %H:%M")}</div>', unsafe_allow_html=True)
+    
+    # Description
+    st.markdown("""
+    This dashboard predicts the estimated biomass for L. Vannamei ponds in the Count 366 system. 
+    Predictions are based on current pond conditions and key assumptions including survival rate, 
+    daily growth rate, and days of culture.
+    """)
+    st.markdown("---")
     
     # Load data
     default_file = Path("runningPonds.csv")
@@ -261,18 +269,20 @@ def main():
     forecast_df = calculate_10_day_forecast(valid_ponds)
     
     # === SECTION 1: METHODOLOGY ===
-    st.markdown("## Prediction Methodology & Assumptions")
+    st.markdown("## Methodology")
     
-    with st.expander("View Constants and Formulas", expanded=False):
+    with st.expander("View Assumptions & Calculation Methods", expanded=False):
         col1, col2 = st.columns([1, 1])
         
         with col1:
             st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-            st.markdown("### Prediction Constants")
+            st.markdown("### Key Assumptions")
             st.markdown(f"""
             - **Survival Rate:** {SURVIVAL_RATE * 100:.0f}% ({SURVIVAL_RATE})
             - **Daily Growth Rate:** {DAILY_GROWTH} grams/day
             - **Forecast Period:** {FORECAST_DAYS} days
+            
+            *These assumptions are used to calculate biomass projections for all ponds in the Count 366 system.*
             """)
             st.markdown('</div>', unsafe_allow_html=True)
             
