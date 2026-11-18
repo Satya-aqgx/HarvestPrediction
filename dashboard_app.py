@@ -233,7 +233,7 @@ def create_count_per_kg_grouping(forecast_df):
 # Main Dashboard
 def main():
     # Header
-    st.markdown('<div class="main-header">🦐 Aquaculture Harvest Prediction Dashboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">Aquaculture Harvest Prediction Dashboard</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="sub-header">Generated on {datetime.now().strftime("%B %d, %Y at %H:%M:%S")}</div>', unsafe_allow_html=True)
     
     # Load data
@@ -261,14 +261,14 @@ def main():
     forecast_df = calculate_10_day_forecast(valid_ponds)
     
     # === SECTION 1: METHODOLOGY ===
-    st.markdown("## 📋 Prediction Methodology & Assumptions")
+    st.markdown("## Prediction Methodology & Assumptions")
     
-    with st.expander("🔧 View Constants and Formulas", expanded=False):
+    with st.expander("View Constants and Formulas", expanded=False):
         col1, col2 = st.columns([1, 1])
         
         with col1:
             st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-            st.markdown("### 🔢 Prediction Constants")
+            st.markdown("### Prediction Constants")
             st.markdown(f"""
             - **Survival Rate:** {SURVIVAL_RATE * 100:.0f}% ({SURVIVAL_RATE})
             - **Daily Growth Rate:** {DAILY_GROWTH} grams/day
@@ -277,9 +277,7 @@ def main():
             st.markdown('</div>', unsafe_allow_html=True)
             
             st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-            st.markdown("### 📐 Calculation Formulas")
-            st.markdown('<div class="formula">Current DOC = daysOfCulture + elapsedDays</div>', unsafe_allow_html=True)
-            st.markdown('<div class="formula">Estimated ABW = Interpolate_from_DOC_ABW_Table(currentDOC)</div>', unsafe_allow_html=True)
+            st.markdown("### Calculation Formulas")
             st.markdown('<div class="formula">Surviving Count = totalSeed × survivalRate</div>', unsafe_allow_html=True)
             st.markdown('<div class="formula">Current Biomass (KG) = (survivingCount × currentABW) ÷ 1000</div>', unsafe_allow_html=True)
             st.markdown('<div class="formula">Future DOC = currentDOC + forecastPeriod</div>', unsafe_allow_html=True)
@@ -290,8 +288,8 @@ def main():
         
         with col2:
             st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-            st.markdown("### 📈 DOC to ABW Reference Table")
-            st.markdown("*Days of Culture (DOC) → Average Body Weight (ABW)*")
+            st.markdown("### DOC to ABW Reference Table")
+            st.markdown("*Days of Culture (DOC) to Average Body Weight (ABW)*")
             lookup_df = pd.DataFrame(list(DOC_ABW_LOOKUP.items()), columns=['DOC (Days)', 'ABW (grams)'])
             st.dataframe(lookup_df, use_container_width=True, height=400, hide_index=True)
             st.markdown("*Linear interpolation applied for values between reference points*")
@@ -300,7 +298,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 2: KEY INSIGHTS ===
-    st.markdown("## 📊 Key Insights")
+    st.markdown("## Key Insights")
     
     # Calculate totals
     vannamei_count = len(df)
@@ -316,27 +314,26 @@ def main():
     
     with col1:
         st.metric(
-            label="Total L. Vannamei Ponds",
+            label="Total Ponds",
             value=vannamei_count
         )
     
     with col2:
         st.metric(
-            label="Total Seeds (All Ponds)",
+            label="Total Seeds",
             value=f"{total_seeds:,.0f}"
         )
     
     with col3:
         st.metric(
             label="Successful Predictions",
-            value=f"{successful} / {len(df)}",
-            delta=f"{successful/len(df)*100:.1f}% success rate"
+            value=successful
         )
     
     st.markdown("---")
     
     # Row 2: Biomass comparison - BIG NUMBERS
-    st.markdown("### 🎯 Biomass Comparison")
+    st.markdown("### Biomass Comparison")
     
     col1, col2 = st.columns(2)
     
@@ -379,7 +376,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 3: SHRIMP COUNT PER KG ===
-    st.markdown("## 🦐 Shrimp Count per KG Distribution (After 10 Days)")
+    st.markdown("## Shrimp Count per KG Distribution (After 10 Days)")
     
     grouped_forecast = create_count_per_kg_grouping(forecast_df)
     
@@ -424,7 +421,7 @@ def main():
     st.plotly_chart(fig_count, use_container_width=True)
     
     # Summary table
-    st.markdown("### 📋 Summary by Count per KG")
+    st.markdown("### Summary by Count per KG")
     display_grouped = grouped_forecast.copy()
     display_grouped['currentBiomassKG'] = display_grouped['currentBiomassKG'].apply(lambda x: f"{x:,.2f}")
     display_grouped['estimatedHarvestKG'] = display_grouped['estimatedHarvestKG'].apply(lambda x: f"{x:,.2f}")
@@ -434,7 +431,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 4: TOP 10 PONDS ===
-    st.markdown("## 🏆 Top 10 Ponds by Estimated Harvest (After 10 Days)")
+    st.markdown("## Top 10 Ponds by Estimated Harvest (After 10 Days)")
     
     top_ponds = forecast_df.nlargest(10, 'estimatedHarvestKG')
     top_ponds['label'] = top_ponds.apply(lambda x: f"Pond {int(x['pondId'])}", axis=1)
@@ -465,7 +462,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 5: PREDICTION BREAKDOWN ===
-    st.markdown("## 📊 Prediction Success Breakdown")
+    st.markdown("## Prediction Success Breakdown")
     
     col1, col2 = st.columns(2)
     
@@ -504,7 +501,7 @@ def main():
     st.markdown("---")
     
     # === SECTION 6: DETAILED TABLE ===
-    st.markdown("## 📋 Detailed 10-Day Forecast by Pond")
+    st.markdown("## Detailed 10-Day Forecast by Pond")
     
     display_forecast = forecast_df[[
         'pondId', 'name', 'area', 'totalSeed', 'currentDoc', 'currentABW',
@@ -528,19 +525,6 @@ def main():
     ]
     
     st.dataframe(display_forecast, use_container_width=True, height=500)
-    
-    # === FOOTER ===
-    st.markdown("---")
-    st.markdown(
-        """
-        <div style='text-align: center; color: #666; padding: 1rem;'>
-            <p><strong>ℹ️ Data Source:</strong> runningPonds.csv | 
-            <strong>📅 Generated:</strong> {} | 
-            <strong>🔄 Methodology:</strong> 80% survival, 0.25g/day growth, 10-day forecast</p>
-        </div>
-        """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-        unsafe_allow_html=True
-    )
 
 if __name__ == "__main__":
     main()
