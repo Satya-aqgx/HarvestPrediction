@@ -348,6 +348,11 @@ def main():
     This dashboard predicts the estimated biomass for L. Vannamei ponds in the Count 366 system. 
     Predictions are based on current pond conditions and key assumptions including survival rate, 
     daily growth rate, and days of culture.
+    
+    **Default values used:** Survival Rate = 80%, Daily Growth = 0.25 g/day, Forecast Period = 10 days
+    
+    You can customize these parameters and the DOC-ABW reference table using the sidebar (left panel). 
+    Adjust the values and click **"Apply Changes"** to recalculate predictions with your custom parameters.
     """)
     st.markdown("---")
     
