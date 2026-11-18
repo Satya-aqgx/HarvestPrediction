@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
     <style>
     .main-header {
@@ -41,15 +41,6 @@ st.markdown("""
         font-weight: bold;
         color: #1f77b4;
     }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #333;
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        border-bottom: 2px solid #1f77b4;
-        padding-bottom: 0.5rem;
-    }
     .methodology-box {
         background-color: #f8f9fa;
         padding: 1.5rem;
@@ -63,6 +54,7 @@ st.markdown("""
         padding: 0.5rem;
         border-radius: 0.25rem;
         margin: 0.25rem 0;
+        font-size: 0.9rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -248,91 +240,123 @@ def main():
     default_file = Path("runningPonds.csv")
     
     if not default_file.exists():
-        st.error("❌ Data file 'runningPonds.csv' not found. Please ensure the file is in the same directory.")
+        st.error("❌ Data file 'runningPonds.csv' not found.")
         return
     
     df = load_and_process_data(default_file)
     
     if df is None or len(df) == 0:
-        st.warning("⚠️ No data available to display.")
+        st.warning("⚠️ No data available.")
         return
     
-    # Calculate biomass for current state
+    # Calculate biomass
     df[["estimatedABW", "survivingCount", "currentBiomassKG", "predictionStatus"]] = df.apply(
         calculate_pond_biomass, axis=1
     )
     
-    # Filter successful predictions for forecast
+    # Filter successful predictions
     valid_ponds = df[df["predictionStatus"] == "Success"].copy()
     
     # Calculate 10-day forecast
     forecast_df = calculate_10_day_forecast(valid_ponds)
     
-    # === SECTION 1: KEY METRICS ===
-    st.markdown("## 📊 Overview")
+    # === SECTION 1: METHODOLOGY ===
+    st.markdown("## 📋 Prediction Methodology & Assumptions")
     
-    col1, col2, col3, col4 = st.columns(4)
+    with st.expander("🔧 View Constants and Formulas", expanded=False):
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
+            st.markdown("### 🔢 Prediction Constants")
+            st.markdown(f"""
+            - **Survival Rate:** {SURVIVAL_RATE * 100:.0f}% ({SURVIVAL_RATE})
+            - **Daily Growth Rate:** {DAILY_GROWTH} grams/day
+            - **Forecast Period:** {FORECAST_DAYS} days
+            """)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
+            st.markdown("### 📐 Calculation Formulas")
+            st.markdown('<div class="formula">Current DOC = daysOfCulture + elapsedDays</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Estimated ABW = Interpolate_from_DOC_ABW_Table(currentDOC)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Surviving Count = totalSeed × survivalRate</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Current Biomass (KG) = (survivingCount × currentABW) ÷ 1000</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Future DOC = currentDOC + forecastPeriod</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Future ABW = currentABW + (dailyGrowth × forecastPeriod)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Future Biomass (KG) = (survivingCount × futureABW) ÷ 1000</div>', unsafe_allow_html=True)
+            st.markdown('<div class="formula">Shrimp Count per KG = 1000 ÷ ABW</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
+            st.markdown("### 📈 DOC to ABW Reference Table")
+            st.markdown("*Days of Culture (DOC) → Average Body Weight (ABW)*")
+            lookup_df = pd.DataFrame(list(DOC_ABW_LOOKUP.items()), columns=['DOC (Days)', 'ABW (grams)'])
+            st.dataframe(lookup_df, use_container_width=True, height=400, hide_index=True)
+            st.markdown("*Linear interpolation applied for values between reference points*")
+            st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # === SECTION 2: KEY INSIGHTS ===
+    st.markdown("## 📊 Key Insights")
+    
+    # Calculate totals
+    vannamei_count = len(df)
+    total_seeds = df["totalSeed"].sum()
+    current_total_biomass = valid_ponds["currentBiomassKG"].sum()
+    forecast_total_biomass = forecast_df["estimatedHarvestKG"].sum()
+    growth = forecast_total_biomass - current_total_biomass
+    growth_pct = (growth / current_total_biomass * 100) if current_total_biomass > 0 else 0
+    successful = len(valid_ponds)
+    
+    # Row 1: Basic counts
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.metric(
-            label="Total Ponds",
-            value=len(df),
-            delta=None
+            label="Total L. Vannamei Ponds",
+            value=vannamei_count
         )
     
     with col2:
-        vannamei_count = len(df[df["cultureType"] == "L. Vannamei"])
         st.metric(
-            label="L. Vannamei Ponds",
-            value=vannamei_count,
-            delta=f"{vannamei_count/len(df)*100:.0f}%" if len(df) > 0 else "0%"
+            label="Total Seeds (All Ponds)",
+            value=f"{total_seeds:,.0f}"
         )
     
     with col3:
-        successful = len(df[df["predictionStatus"] == "Success"])
         st.metric(
             label="Successful Predictions",
-            value=successful,
-            delta=f"{successful/len(df)*100:.0f}% success rate" if len(df) > 0 else "0%"
-        )
-    
-    with col4:
-        failed = len(df[df["predictionStatus"] != "Success"])
-        st.metric(
-            label="Failed Predictions",
-            value=failed,
-            delta=f"DOC out of range" if failed > 0 else "All valid"
+            value=f"{successful} / {len(df)}",
+            delta=f"{successful/len(df)*100:.1f}% success rate"
         )
     
     st.markdown("---")
     
-    # === SECTION 2: BIOMASS COMPARISON ===
-    st.markdown("## 🎯 Current vs 10-Day Forecast")
-    
-    current_total = df["currentBiomassKG"].sum()
-    forecast_total = forecast_df["estimatedHarvestKG"].sum()
-    growth = forecast_total - current_total
-    growth_pct = (growth / current_total * 100) if current_total > 0 else 0
+    # Row 2: Biomass comparison - BIG NUMBERS
+    st.markdown("### 🎯 Biomass Comparison")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.markdown("### Current Total Biomass")
-        st.markdown(f'<div class="big-metric">{current_total:,.0f} KG</div>', unsafe_allow_html=True)
+        st.markdown("#### Current Total Biomass")
+        st.markdown(f'<div class="big-metric">{current_total_biomass:,.0f} KG</div>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col2:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.markdown("### Estimated in 10 Days")
-        st.markdown(f'<div class="big-metric">{forecast_total:,.0f} KG</div>', unsafe_allow_html=True)
-        st.markdown(f'<p style="color: #2ca02c; font-size: 1.2rem; font-weight: bold;">↑ +{growth:,.0f} KG (+{growth_pct:.1f}%)</p>', unsafe_allow_html=True)
+        st.markdown("#### Estimated Biomass (After 10 Days)")
+        st.markdown(f'<div class="big-metric">{forecast_total_biomass:,.0f} KG</div>', unsafe_allow_html=True)
+        st.markdown(f'<p style="color: #2ca02c; font-size: 1.5rem; font-weight: bold;">↑ +{growth:,.0f} KG (+{growth_pct:.1f}%)</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Comparison chart
     comparison_data = pd.DataFrame({
-        'Period': ['Current', '10-Day Forecast'],
-        'Biomass (KG)': [current_total, forecast_total]
+        'Period': ['Current', 'After 10 Days'],
+        'Biomass (KG)': [current_total_biomass, forecast_total_biomass]
     })
     
     fig_comparison = px.bar(
@@ -341,127 +365,83 @@ def main():
         y='Biomass (KG)',
         text='Biomass (KG)',
         color='Period',
-        color_discrete_map={'Current': '#1f77b4', '10-Day Forecast': '#2ca02c'}
+        color_discrete_map={'Current': '#1f77b4', 'After 10 Days': '#2ca02c'}
     )
     fig_comparison.update_traces(texttemplate='%{text:,.0f} KG', textposition='outside')
     fig_comparison.update_layout(
         showlegend=False,
         height=400,
-        yaxis_title="Total Biomass (KG)"
+        yaxis_title="Total Biomass (KG)",
+        xaxis_title=""
     )
     st.plotly_chart(fig_comparison, use_container_width=True)
     
     st.markdown("---")
     
-    # === SECTION 3: METHODOLOGY ===
-    st.markdown("## 📋 Prediction Methodology & Assumptions")
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-        st.markdown("### 🔧 Prediction Parameters")
-        st.markdown(f"""
-        - **Survival Rate:** {SURVIVAL_RATE * 100:.0f}%
-        - **Daily Growth Rate:** {DAILY_GROWTH} grams/day
-        - **Forecast Period:** {FORECAST_DAYS} days
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-        st.markdown("### 📐 Key Formulas")
-        st.markdown('<div class="formula">Current DOC = daysOfCulture + elapsedDays</div>', unsafe_allow_html=True)
-        st.markdown('<div class="formula">Surviving Count = totalSeed × survivalRate</div>', unsafe_allow_html=True)
-        st.markdown('<div class="formula">Current Biomass = survivingCount × ABW ÷ 1000</div>', unsafe_allow_html=True)
-        st.markdown('<div class="formula">Future ABW = currentABW + (dailyGrowth × 10)</div>', unsafe_allow_html=True)
-        st.markdown('<div class="formula">Shrimp per KG = 1000 ÷ ABW</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown('<div class="methodology-box">', unsafe_allow_html=True)
-        st.markdown("### 📈 DOC to ABW Lookup Table")
-        lookup_df = pd.DataFrame(list(DOC_ABW_LOOKUP.items()), columns=['DOC (Days)', 'ABW (grams)'])
-        st.dataframe(lookup_df, use_container_width=True, height=400)
-        st.markdown("*Interpolation used for values between reference points*")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # === SECTION 4: PREDICTION SUCCESS RATE ===
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 🎯 Prediction Success Rate")
-        success_data = df["predictionStatus"].value_counts()
-        fig_success = px.pie(
-            values=success_data.values,
-            names=success_data.index,
-            color_discrete_map={'Success': '#2ca02c', 'DOC outside reference range': '#ff7f0e'}
-        )
-        fig_success.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig_success, use_container_width=True)
-    
-    with col2:
-        st.markdown("### 📊 Prediction Statistics")
-        st.markdown(f"""
-        - **Total Ponds Analyzed:** {len(df)}
-        - **Successful Predictions:** {successful}
-        - **Out of Range:** {failed}
-        - **Success Rate:** {successful/len(df)*100:.1f}%
-        
-        *Ponds with DOC outside 10-140 days cannot be predicted using the reference table.*
-        """)
-    
-    st.markdown("---")
-    
-    # === SECTION 5: SHRIMP COUNT PER KG ===
-    st.markdown("## 🦐 Shrimp Count per KG Distribution (10-Day Forecast)")
+    # === SECTION 3: SHRIMP COUNT PER KG ===
+    st.markdown("## 🦐 Shrimp Count per KG Distribution (After 10 Days)")
     
     grouped_forecast = create_count_per_kg_grouping(forecast_df)
     
-    col1, col2 = st.columns([2, 1])
+    # Create grouped bar chart
+    fig_count = go.Figure()
     
-    with col1:
-        fig_count = px.bar(
-            grouped_forecast,
-            x='estimatedShrimpPerKG',
-            y='estimatedHarvestKG',
-            text='pondCount',
-            labels={
-                'estimatedShrimpPerKG': 'Estimated Count per KG',
-                'estimatedHarvestKG': 'Total Biomass (KG)',
-                'pondCount': 'Pond Count'
-            },
-            color='estimatedHarvestKG',
-            color_continuous_scale='Teal'
-        )
-        fig_count.update_traces(texttemplate='%{text} ponds', textposition='outside')
-        fig_count.update_layout(
-            height=400,
-            showlegend=False,
-            xaxis_title="Shrimp Count per KG (Estimated)",
-            yaxis_title="Total Forecast Biomass (KG)"
-        )
-        st.plotly_chart(fig_count, use_container_width=True)
+    fig_count.add_trace(go.Bar(
+        x=grouped_forecast['estimatedShrimpPerKG'],
+        y=grouped_forecast['currentBiomassKG'],
+        name='Current Biomass',
+        text=grouped_forecast['currentBiomassKG'].apply(lambda x: f'{x:,.0f} KG'),
+        textposition='auto',
+        marker_color='#1f77b4',
+        hovertemplate='Count/KG: %{x}<br>Current: %{y:,.0f} KG<extra></extra>'
+    ))
     
-    with col2:
-        st.markdown("### Summary by Count/KG")
-        display_grouped = grouped_forecast.copy()
-        display_grouped['estimatedHarvestKG'] = display_grouped['estimatedHarvestKG'].apply(lambda x: f"{x:,.0f}")
-        display_grouped['currentBiomassKG'] = display_grouped['currentBiomassKG'].apply(lambda x: f"{x:,.0f}")
-        display_grouped.columns = ['Count/KG', 'Ponds', 'Current (KG)', 'Forecast (KG)']
-        st.dataframe(display_grouped, use_container_width=True, hide_index=True)
+    fig_count.add_trace(go.Bar(
+        x=grouped_forecast['estimatedShrimpPerKG'],
+        y=grouped_forecast['estimatedHarvestKG'],
+        name='10-Day Forecast',
+        text=grouped_forecast['estimatedHarvestKG'].apply(lambda x: f'{x:,.0f} KG'),
+        textposition='auto',
+        marker_color='#2ca02c',
+        hovertemplate='Count/KG: %{x}<br>Forecast: %{y:,.0f} KG<extra></extra>'
+    ))
+    
+    fig_count.update_layout(
+        barmode='group',
+        height=450,
+        xaxis_title="Shrimp Count per KG",
+        yaxis_title="Total Biomass (KG)",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        hovermode='x unified'
+    )
+    
+    st.plotly_chart(fig_count, use_container_width=True)
+    
+    # Summary table
+    st.markdown("### 📋 Summary by Count per KG")
+    display_grouped = grouped_forecast.copy()
+    display_grouped['currentBiomassKG'] = display_grouped['currentBiomassKG'].apply(lambda x: f"{x:,.2f}")
+    display_grouped['estimatedHarvestKG'] = display_grouped['estimatedHarvestKG'].apply(lambda x: f"{x:,.2f}")
+    display_grouped.columns = ['Count/KG', 'Number of Ponds', 'Current Biomass (KG)', '10-Day Forecast (KG)']
+    st.dataframe(display_grouped, use_container_width=True, hide_index=True)
     
     st.markdown("---")
     
-    # === SECTION 6: TOP PERFORMERS ===
-    st.markdown("## 🏆 Top 10 Ponds by Forecast Harvest")
+    # === SECTION 4: TOP 10 PONDS ===
+    st.markdown("## 🏆 Top 10 Ponds by Estimated Harvest (After 10 Days)")
     
     top_ponds = forecast_df.nlargest(10, 'estimatedHarvestKG')
+    top_ponds['label'] = top_ponds.apply(lambda x: f"Pond {int(x['pondId'])}", axis=1)
     
     fig_top = px.bar(
         top_ponds,
-        y='name',
+        y='label',
         x='estimatedHarvestKG',
         orientation='h',
         text='estimatedHarvestKG',
@@ -469,100 +449,63 @@ def main():
         color_continuous_scale='Viridis',
         labels={
             'estimatedHarvestKG': 'Estimated Harvest (KG)',
-            'name': 'Pond Name'
+            'label': 'Pond ID'
         }
     )
     fig_top.update_traces(texttemplate='%{text:,.0f} KG', textposition='outside')
     fig_top.update_layout(
         height=500,
         showlegend=False,
-        yaxis={'categoryorder': 'total ascending'}
+        yaxis={'categoryorder': 'total ascending'},
+        xaxis_title="Estimated Harvest after 10 Days (KG)",
+        yaxis_title=""
     )
     st.plotly_chart(fig_top, use_container_width=True)
     
     st.markdown("---")
     
-    # === SECTION 7: DOC VS ABW ANALYSIS ===
-    st.markdown("## � Days of Culture (DOC) vs Average Body Weight (ABW)")
+    # === SECTION 5: PREDICTION BREAKDOWN ===
+    st.markdown("## 📊 Prediction Success Breakdown")
     
-    fig_scatter = px.scatter(
-        valid_ponds,
-        x='currentDOC',
-        y='estimatedABW',
-        size='currentBiomassKG',
-        color='currentBiomassKG',
-        hover_data=['name', 'totalSeed', 'area'],
-        labels={
-            'currentDOC': 'Current DOC (Days)',
-            'estimatedABW': 'Current ABW (grams)',
-            'currentBiomassKG': 'Biomass (KG)'
-        },
-        color_continuous_scale='RdYlGn'
-    )
+    col1, col2 = st.columns(2)
     
-    # Add reference line from lookup table
-    lookup_x = list(DOC_ABW_LOOKUP.keys())
-    lookup_y = list(DOC_ABW_LOOKUP.values())
-    fig_scatter.add_trace(
-        go.Scatter(
-            x=lookup_x,
-            y=lookup_y,
-            mode='lines',
-            name='Reference Curve',
-            line=dict(color='red', width=2, dash='dash')
+    with col1:
+        success_data = df["predictionStatus"].value_counts()
+        fig_success = px.pie(
+            values=success_data.values,
+            names=success_data.index,
+            color_discrete_map={
+                'Success': '#2ca02c',
+                'DOC outside reference range': '#ff7f0e',
+                'Invalid DOC': '#d62728',
+                'Invalid totalSeed': '#d62728'
+            }
         )
-    )
+        fig_success.update_traces(textposition='inside', textinfo='percent+label')
+        fig_success.update_layout(height=400)
+        st.plotly_chart(fig_success, use_container_width=True)
     
-    fig_scatter.update_layout(height=500)
-    st.plotly_chart(fig_scatter, use_container_width=True)
+    with col2:
+        st.markdown("### Prediction Details")
+        st.markdown(f"""
+        **Total Ponds:** {len(df)}
+        
+        **Successful Predictions:** {successful}
+        - Ponds with DOC within reference range (10-140 days)
+        - Complete prediction data available
+        
+        **Failed Predictions:** {len(df) - successful}
+        - Ponds with DOC outside 10-140 day range
+        - Cannot interpolate ABW from reference table
+        
+        **Success Rate:** {successful/len(df)*100:.1f}%
+        """)
     
     st.markdown("---")
     
-    # === SECTION 8: SUMMARY STATISTICS ===
-    st.markdown("## 📋 Summary Statistics")
+    # === SECTION 6: DETAILED TABLE ===
+    st.markdown("## 📋 Detailed 10-Day Forecast by Pond")
     
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_seeds = df["totalSeed"].sum()
-        st.metric("Total Seeds Stocked", f"{total_seeds:,.0f}")
-    
-    with col2:
-        estimated_surviving = total_seeds * SURVIVAL_RATE
-        st.metric("Estimated Surviving", f"{estimated_surviving:,.0f}")
-    
-    with col3:
-        avg_abw = valid_ponds["estimatedABW"].mean()
-        st.metric("Average Current ABW", f"{avg_abw:.2f}g")
-    
-    with col4:
-        avg_doc = valid_ponds["currentDOC"].mean()
-        st.metric("Average DOC", f"{avg_doc:.0f} days")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        avg_future_abw = forecast_df["estimatedABW"].mean()
-        st.metric("Average Day-10 ABW", f"{avg_future_abw:.2f}g")
-    
-    with col2:
-        avg_current_per_kg = (1000 / valid_ponds["estimatedABW"]).mean()
-        st.metric("Avg Shrimp/KG (Now)", f"{avg_current_per_kg:.0f}")
-    
-    with col3:
-        avg_future_per_kg = (1000 / forecast_df["estimatedABW"]).mean()
-        st.metric("Avg Shrimp/KG (Day 10)", f"{avg_future_per_kg:.0f}")
-    
-    with col4:
-        total_area = df["area"].sum()
-        st.metric("Total Area", f"{total_area:.0f} Acres")
-    
-    st.markdown("---")
-    
-    # === SECTION 9: DETAILED FORECAST TABLE ===
-    st.markdown("## � Detailed 10-Day Forecast by Pond")
-    
-    # Prepare display dataframe
     display_forecast = forecast_df[[
         'pondId', 'name', 'area', 'totalSeed', 'currentDoc', 'currentABW',
         'currentBiomassKG', 'forecastDOC', 'estimatedABW', 'estimatedHarvestKG',
@@ -571,28 +514,20 @@ def main():
     
     # Format columns
     display_forecast['totalSeed'] = display_forecast['totalSeed'].apply(lambda x: f"{x:,.0f}")
-    display_forecast['currentABW'] = display_forecast['currentABW'].apply(lambda x: f"{x:.2f}g")
+    display_forecast['currentABW'] = display_forecast['currentABW'].apply(lambda x: f"{x:.2f}")
     display_forecast['currentBiomassKG'] = display_forecast['currentBiomassKG'].apply(lambda x: f"{x:,.2f}")
-    display_forecast['estimatedABW'] = display_forecast['estimatedABW'].apply(lambda x: f"{x:.2f}g")
+    display_forecast['estimatedABW'] = display_forecast['estimatedABW'].apply(lambda x: f"{x:.2f}")
     display_forecast['estimatedHarvestKG'] = display_forecast['estimatedHarvestKG'].apply(lambda x: f"{x:,.2f}")
+    display_forecast['currentShrimpPerKG'] = display_forecast['currentShrimpPerKG'].apply(lambda x: f"{x:.0f}")
+    display_forecast['estimatedShrimpPerKG'] = display_forecast['estimatedShrimpPerKG'].apply(lambda x: f"{x:.0f}")
     
-    # Rename columns
     display_forecast.columns = [
         'Pond ID', 'Pond Name', 'Area (Acres)', 'Seeds', 'Current DOC',
-        'Current ABW', 'Current Biomass (KG)', 'Day-10 DOC', 'Day-10 ABW',
-        'Day-10 Harvest (KG)', 'Current Count/KG', 'Day-10 Count/KG'
+        'Current ABW (g)', 'Current Biomass (KG)', 'Day-10 DOC', 'Day-10 ABW (g)',
+        'Day-10 Forecast (KG)', 'Current Count/KG', 'Day-10 Count/KG'
     ]
     
-    st.dataframe(display_forecast, use_container_width=True, height=400)
-    
-    # Download button
-    csv = forecast_df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Detailed Forecast as CSV",
-        data=csv,
-        file_name=f"harvest_forecast_10days_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv",
-    )
+    st.dataframe(display_forecast, use_container_width=True, height=500)
     
     # === FOOTER ===
     st.markdown("---")
@@ -601,7 +536,7 @@ def main():
         <div style='text-align: center; color: #666; padding: 1rem;'>
             <p><strong>ℹ️ Data Source:</strong> runningPonds.csv | 
             <strong>📅 Generated:</strong> {} | 
-            <strong>🔄 Methodology:</strong> 80% survival rate, 0.25g/day growth, 10-day forecast</p>
+            <strong>🔄 Methodology:</strong> 80% survival, 0.25g/day growth, 10-day forecast</p>
         </div>
         """.format(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
         unsafe_allow_html=True
