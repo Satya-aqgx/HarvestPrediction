@@ -234,35 +234,42 @@ def create_count_per_kg_grouping(forecast_df):
 def main():
     # === SIDEBAR: PARAMETER INPUTS ===
     st.sidebar.title("Prediction Parameters")
-    st.sidebar.markdown("Adjust the parameters below and click 'Apply' to update predictions.")
+    st.sidebar.markdown("Adjust the parameters below and click **'Apply Changes'** to update predictions.")
     st.sidebar.markdown("---")
     
+    # Initialize session state for parameters if not exists
+    if 'applied_survival_rate' not in st.session_state:
+        st.session_state.applied_survival_rate = DEFAULT_SURVIVAL_RATE
+        st.session_state.applied_daily_growth = DEFAULT_DAILY_GROWTH
+        st.session_state.applied_forecast_days = DEFAULT_FORECAST_DAYS
+        st.session_state.applied_doc_abw_lookup = DEFAULT_DOC_ABW_LOOKUP.copy()
+    
     # Survival Rate
-    survival_rate = st.sidebar.slider(
+    survival_rate_input = st.sidebar.slider(
         "Survival Rate (%)",
         min_value=50,
         max_value=100,
-        value=int(DEFAULT_SURVIVAL_RATE * 100),
+        value=int(st.session_state.applied_survival_rate * 100),
         step=1,
         help="Expected survival rate of stocked seeds"
     ) / 100
     
     # Daily Growth
-    daily_growth = st.sidebar.number_input(
+    daily_growth_input = st.sidebar.number_input(
         "Daily Growth (grams/day)",
         min_value=0.1,
         max_value=1.0,
-        value=DEFAULT_DAILY_GROWTH,
+        value=st.session_state.applied_daily_growth,
         step=0.05,
         help="Expected daily weight gain per shrimp"
     )
     
     # Forecast Days
-    forecast_days = st.sidebar.number_input(
+    forecast_days_input = st.sidebar.number_input(
         "Forecast Period (days)",
         min_value=1,
         max_value=30,
-        value=DEFAULT_FORECAST_DAYS,
+        value=st.session_state.applied_forecast_days,
         step=1,
         help="Number of days to forecast ahead"
     )
@@ -272,7 +279,7 @@ def main():
     st.sidebar.markdown("Edit the reference values below:")
     
     # DOC-ABW Lookup Table inputs
-    doc_abw_lookup = {}
+    doc_abw_lookup_input = {}
     
     # Create editable inputs for each DOC-ABW pair
     st.sidebar.markdown("**DOC (Days) : ABW (grams)**")
@@ -281,43 +288,55 @@ def main():
     
     # First column (DOC 10-70)
     with col1:
-        doc_abw_lookup[10] = st.number_input("10", value=DEFAULT_DOC_ABW_LOOKUP[10], step=0.1, key="doc10", label_visibility="collapsed")
-        st.markdown("**10** days")
-        doc_abw_lookup[20] = st.number_input("20", value=DEFAULT_DOC_ABW_LOOKUP[20], step=0.1, key="doc20", label_visibility="collapsed")
-        st.markdown("**20** days")
-        doc_abw_lookup[30] = st.number_input("30", value=DEFAULT_DOC_ABW_LOOKUP[30], step=0.1, key="doc30", label_visibility="collapsed")
-        st.markdown("**30** days")
-        doc_abw_lookup[40] = st.number_input("40", value=DEFAULT_DOC_ABW_LOOKUP[40], step=0.1, key="doc40", label_visibility="collapsed")
-        st.markdown("**40** days")
-        doc_abw_lookup[50] = st.number_input("50", value=DEFAULT_DOC_ABW_LOOKUP[50], step=0.1, key="doc50", label_visibility="collapsed")
-        st.markdown("**50** days")
-        doc_abw_lookup[60] = st.number_input("60", value=DEFAULT_DOC_ABW_LOOKUP[60], step=0.1, key="doc60", label_visibility="collapsed")
-        st.markdown("**60** days")
-        doc_abw_lookup[70] = st.number_input("70", value=DEFAULT_DOC_ABW_LOOKUP[70], step=0.1, key="doc70", label_visibility="collapsed")
-        st.markdown("**70** days")
+        doc_abw_lookup_input[10] = st.number_input("10 days", value=st.session_state.applied_doc_abw_lookup[10], step=0.1, key="doc10")
+        doc_abw_lookup_input[20] = st.number_input("20 days", value=st.session_state.applied_doc_abw_lookup[20], step=0.1, key="doc20")
+        doc_abw_lookup_input[30] = st.number_input("30 days", value=st.session_state.applied_doc_abw_lookup[30], step=0.1, key="doc30")
+        doc_abw_lookup_input[40] = st.number_input("40 days", value=st.session_state.applied_doc_abw_lookup[40], step=0.1, key="doc40")
+        doc_abw_lookup_input[50] = st.number_input("50 days", value=st.session_state.applied_doc_abw_lookup[50], step=0.1, key="doc50")
+        doc_abw_lookup_input[60] = st.number_input("60 days", value=st.session_state.applied_doc_abw_lookup[60], step=0.1, key="doc60")
+        doc_abw_lookup_input[70] = st.number_input("70 days", value=st.session_state.applied_doc_abw_lookup[70], step=0.1, key="doc70")
     
     # Second column (DOC 80-140)
     with col2:
-        doc_abw_lookup[80] = st.number_input("80", value=DEFAULT_DOC_ABW_LOOKUP[80], step=0.1, key="doc80", label_visibility="collapsed")
-        st.markdown("**80** days")
-        doc_abw_lookup[90] = st.number_input("90", value=DEFAULT_DOC_ABW_LOOKUP[90], step=0.1, key="doc90", label_visibility="collapsed")
-        st.markdown("**90** days")
-        doc_abw_lookup[100] = st.number_input("100", value=DEFAULT_DOC_ABW_LOOKUP[100], step=0.1, key="doc100", label_visibility="collapsed")
-        st.markdown("**100** days")
-        doc_abw_lookup[110] = st.number_input("110", value=DEFAULT_DOC_ABW_LOOKUP[110], step=0.1, key="doc110", label_visibility="collapsed")
-        st.markdown("**110** days")
-        doc_abw_lookup[120] = st.number_input("120", value=DEFAULT_DOC_ABW_LOOKUP[120], step=0.1, key="doc120", label_visibility="collapsed")
-        st.markdown("**120** days")
-        doc_abw_lookup[130] = st.number_input("130", value=DEFAULT_DOC_ABW_LOOKUP[130], step=0.1, key="doc130", label_visibility="collapsed")
-        st.markdown("**130** days")
-        doc_abw_lookup[140] = st.number_input("140", value=DEFAULT_DOC_ABW_LOOKUP[140], step=0.1, key="doc140", label_visibility="collapsed")
-        st.markdown("**140** days")
+        doc_abw_lookup_input[80] = st.number_input("80 days", value=st.session_state.applied_doc_abw_lookup[80], step=0.1, key="doc80")
+        doc_abw_lookup_input[90] = st.number_input("90 days", value=st.session_state.applied_doc_abw_lookup[90], step=0.1, key="doc90")
+        doc_abw_lookup_input[100] = st.number_input("100 days", value=st.session_state.applied_doc_abw_lookup[100], step=0.1, key="doc100")
+        doc_abw_lookup_input[110] = st.number_input("110 days", value=st.session_state.applied_doc_abw_lookup[110], step=0.1, key="doc110")
+        doc_abw_lookup_input[120] = st.number_input("120 days", value=st.session_state.applied_doc_abw_lookup[120], step=0.1, key="doc120")
+        doc_abw_lookup_input[130] = st.number_input("130 days", value=st.session_state.applied_doc_abw_lookup[130], step=0.1, key="doc130")
+        doc_abw_lookup_input[140] = st.number_input("140 days", value=st.session_state.applied_doc_abw_lookup[140], step=0.1, key="doc140")
     
     st.sidebar.markdown("---")
     
-    # Reset button
-    if st.sidebar.button("Reset to Defaults"):
+    # Buttons in two columns
+    btn_col1, btn_col2 = st.sidebar.columns(2)
+    
+    with btn_col1:
+        apply_button = st.button("Apply Changes", type="primary", use_container_width=True)
+    
+    with btn_col2:
+        reset_button = st.button("Reset to Defaults", use_container_width=True)
+    
+    # Handle button clicks
+    if apply_button:
+        st.session_state.applied_survival_rate = survival_rate_input
+        st.session_state.applied_daily_growth = daily_growth_input
+        st.session_state.applied_forecast_days = forecast_days_input
+        st.session_state.applied_doc_abw_lookup = doc_abw_lookup_input.copy()
         st.rerun()
+    
+    if reset_button:
+        st.session_state.applied_survival_rate = DEFAULT_SURVIVAL_RATE
+        st.session_state.applied_daily_growth = DEFAULT_DAILY_GROWTH
+        st.session_state.applied_forecast_days = DEFAULT_FORECAST_DAYS
+        st.session_state.applied_doc_abw_lookup = DEFAULT_DOC_ABW_LOOKUP.copy()
+        st.rerun()
+    
+    # Use applied parameters for calculations
+    survival_rate = st.session_state.applied_survival_rate
+    daily_growth = st.session_state.applied_daily_growth
+    forecast_days = st.session_state.applied_forecast_days
+    doc_abw_lookup = st.session_state.applied_doc_abw_lookup
     
     # === MAIN CONTENT ===
     # Header
