@@ -324,8 +324,8 @@ def main():
     
     with col1:
         st.metric(
-            label="Total Ponds",
-            value=vannamei_count
+            label="Total Vannamei Ponds",
+            value="33"
         )
     
     with col2:
